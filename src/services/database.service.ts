@@ -1,13 +1,24 @@
-import sqlite3 from 'sqlite3';
-import { Database, open } from 'sqlite';
-import path from 'path';
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
+dotenv.config();
 
 class DatabaseService {
   private static instance: DatabaseService;
-  private db: Database | null = null;
-
-  private constructor() {}
+  private pool: Pool;
+  private constructor() {
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false,
+        ca: fs.readFileSync(
+          path.join(__dirname, '../config/db-certificate.pem')
+        ),
+      },
+    });
+  }
 
   public static getInstance(): DatabaseService {
     if (!DatabaseService.instance) {
@@ -17,101 +28,127 @@ class DatabaseService {
   }
 
   public async initialize(): Promise<void> {
-    if (this.db) return;
-
-    this.db = await open({
-      filename: path.resolve(__dirname, '../../database.sqlite'),
-      driver: sqlite3.Database,
-    });
-
     await this.createTables();
   }
 
   private async createTables(): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+  
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS roles (
+          id UUID PRIMARY KEY,
+          name TEXT NOT NULL,
+          createdAt TIMESTAMPTZ NOT NULL
+        );
+      `);
+  
+      await client.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'roles_name_unique'
+          ) THEN
+            ALTER TABLE roles ADD CONSTRAINT roles_name_unique UNIQUE (name);
+          END IF;
+        END $$;
+      `);
+  
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id UUID PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          password TEXT NOT NULL,
+          roleId UUID REFERENCES roles(id) ON DELETE CASCADE,
+          createdAt TIMESTAMPTZ NOT NULL
+        );
+      `);
+  
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS categories (
+          id UUID PRIMARY KEY,
+          name TEXT NOT NULL,
+          createdAt TIMESTAMPTZ NOT NULL
+        );
+      `);
+  
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS tasks (
+          id UUID PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT NOT NULL CHECK (status IN ('todo', 'in-progress', 'done')),
+          categoryId UUID REFERENCES categories(id) ON DELETE CASCADE,
+          userId UUID REFERENCES users(id) ON DELETE CASCADE,
+          parentId UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          lat DOUBLE PRECISION,
+          lng DOUBLE PRECISION,
+          endTime TIMESTAMPTZ,
+          createdAt TIMESTAMPTZ NOT NULL
+        );
+      `);
+  
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS comments (
+          id UUID PRIMARY KEY,
+          taskId UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          text TEXT NOT NULL,
+          createdAt TIMESTAMPTZ NOT NULL
+        );
+      `);
+  
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS businesses (
+          id UUID PRIMARY KEY,
+          name TEXT NOT NULL,
+          employeeCount INTEGER NOT NULL,
+          phoneNumber TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          country TEXT NOT NULL,
+          city TEXT NOT NULL,
+          ownerFullName TEXT NOT NULL,
+          description TEXT,
+          image TEXT,
+          userId UUID REFERENCES users(id) ON DELETE CASCADE,
+          status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected')),
+          createdAt TIMESTAMPTZ NOT NULL
+        );
+      `);
+  
+      const now = new Date().toISOString();
 
-    await this.db.exec(`
-      CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        description TEXT,
-        status TEXT NOT NULL CHECK(status IN ('todo', 'in-progress', 'done')),
-        categoryId TEXT,
-        userId TEXT,
-        parentId TEXT,
-        lat REAL,
-        lng REAL,
-        endTime TEXT,
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (parentId) REFERENCES tasks(id) ON DELETE CASCADE,
-        FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE CASCADE
+      await client.query(
+        `
+        INSERT INTO roles (id, name, createdAt)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (name) DO NOTHING
+        `,
+        [randomUUID(), 'admin', now]
       );
-      CREATE TABLE IF NOT EXISTS comments (
-        id TEXT PRIMARY KEY,
-        taskId TEXT NOT NULL,
-        text TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (taskId) REFERENCES tasks(id) ON DELETE CASCADE
+  
+      await client.query(
+        `
+        INSERT INTO roles (id, name, createdAt)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (name) DO NOTHING
+        `,
+        [randomUUID(), 'user', now]
       );
-      CREATE TABLE IF NOT EXISTS categories (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        createdAt TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS businesses (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        employeeCount INTEGER NOT NULL,
-        phoneNumber TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        country TEXT NOT NULL,
-        city TEXT NOT NULL,
-        ownerFullName TEXT NOT NULL,
-        description TEXT,
-        image TEXT,
-        userId TEXT,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected')),
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        password TEXT NOT NULL,
-        roleId TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        FOREIGN KEY (roleId) REFERENCES roles(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS roles (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        createdAt TEXT NOT NULL
-      );
-    `);
-
-    const adminId = randomUUID();
-    const userId = randomUUID();
-
-    await this.db.run(
-      `INSERT INTO roles (id, name, createdAt)
-       SELECT ?, 'admin', datetime('now')
-       WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'admin')`,
-      adminId
-    );
-
-    await this.db.run(
-      `INSERT INTO roles (id, name, createdAt)
-       SELECT ?, 'user', datetime('now')
-       WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = 'user')`,
-      userId
-    );
+  
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
+  
 
-  public getDb(): Database {
-    if (!this.db) throw new Error('Database not initialized');
-    return this.db;
+  public getClient() {
+    return this.pool;
   }
 }
 

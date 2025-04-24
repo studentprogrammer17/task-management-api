@@ -17,6 +17,7 @@ export const verifyToken = async (
     res.status(403).json({ error: 'No token provided.' });
     return;
   }
+
   const tokenWithoutBearer = token.startsWith('Bearer ')
     ? token.slice(7)
     : token;
@@ -25,7 +26,8 @@ export const verifyToken = async (
     const user = jwt.verify(
       tokenWithoutBearer,
       process.env.JWT_SECRET as string
-    );
+    ) as { id: string };
+
     req.user = user;
     next();
   } catch (err) {
@@ -39,14 +41,16 @@ export const checkAdminRole = async (
   next: NextFunction
 ): Promise<void> => {
   const userId = (req.user as { id: string }).id;
-  const db = DatabaseService.getInstance().getDb();
+  const db = DatabaseService.getInstance().getClient();
+
   try {
-    const userWithRole = await db.get(
-      `SELECT r.name AS role FROM users u JOIN roles r ON u.roleId = r.id WHERE u.id = ?`,
+    const userWithRole = await db.query(
+      `SELECT r.name AS role FROM users u 
+       JOIN roles r ON u.roleId = r.id WHERE u.id = $1`,
       [userId]
     );
 
-    if (!userWithRole || userWithRole.role !== 'admin') {
+    if (!userWithRole.rows.length || userWithRole.rows[0].role !== 'admin') {
       res.status(403).json({ error: 'Access denied. Admins only.' });
       return;
     }

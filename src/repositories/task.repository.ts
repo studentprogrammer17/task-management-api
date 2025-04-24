@@ -1,38 +1,36 @@
 import { v4 as uuidv4 } from 'uuid';
 import DatabaseService from '../services/database.service';
-// import RedisService from '../services/redis.service';
 import { Task, CreateTaskDto, UpdateTaskDto } from '../models/task.model';
 
 class TaskRepository {
   private db = DatabaseService.getInstance();
-  // private redis = RedisService.getInstance();
   private readonly CACHE_TTL = 3600;
   private readonly TASKS_CACHE_KEY = 'tasks:all';
   private readonly TASK_CACHE_KEY = (id: string) => `task:${id}`;
 
   async createTask(task: CreateTaskDto, userId: string): Promise<Task> {
     try {
-      const db = this.db.getDb();
+      const db = this.db.getClient();
       const id = uuidv4();
       const createdAt = new Date().toISOString();
 
       if (task.categoryId) {
-        const category = await db.get('SELECT * FROM categories WHERE id = ?', [
-          task.categoryId,
-        ]);
-        if (!category) {
+        const category = await db.query(
+          'SELECT * FROM categories WHERE id = $1',
+          [task.categoryId]
+        );
+        if (category.rows.length === 0) {
           throw new Error('Category not found');
         }
       }
 
       if (task.endTime) {
         const endTime = new Date(task.endTime);
-        const endTimeString = endTime.toISOString();
-        task.endTime = endTimeString;
+        task.endTime = endTime.toISOString();
       }
 
-      await db.run(
-        'INSERT INTO tasks (id, title, description, status, categoryId, parentId, lat, lng, endTime, userId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      await db.query(
+        'INSERT INTO tasks (id, title, description, status, categoryId, parentId, lat, lng, endTime, userId, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
         [
           id,
           task.title,
@@ -60,21 +58,7 @@ class TaskRepository {
         }
       }
 
-      const newTask = await this.getTaskById(id, userId);
-
-      // await this.redis.del(this.TASKS_CACHE_KEY);
-
-      // try {
-      //   await this.redis.setJSON(
-      //     this.TASK_CACHE_KEY(id),
-      //     newTask,
-      //     this.CACHE_TTL
-      //   );
-      // } catch (redisError) {
-      //   console.error('Failed to cache task:', redisError);
-      // }
-
-      return newTask;
+      return this.getTaskById(id, userId);
     } catch (error) {
       console.error('Error in createTask:', error);
       throw error;
@@ -82,59 +66,58 @@ class TaskRepository {
   }
 
   async getAllTasks(): Promise<Task[]> {
-    // const cachedTasks = await this.redis.getJSON<Task[]>(this.TASKS_CACHE_KEY);
-    // if (cachedTasks) {
-    //   return cachedTasks;
-    // }
-
-    const db = this.db.getDb();
-    const tasks = await db.all<Task[]>(
+    const db = this.db.getClient();
+    const tasksResult = await db.query(
       'SELECT * FROM tasks WHERE parentId IS NULL'
     );
+    const tasks = tasksResult.rows;
 
     for (let task of tasks) {
       task.subtasks = await this.getSubtasks(task.id);
-      const comments = await db.all('SELECT * FROM comments WHERE taskId = ?', [
-        task.id,
-      ]);
-      const category = await db.get('SELECT * FROM categories WHERE id = ?', [
-        task.categoryId,
-      ]);
+      const commentsResult = await db.query(
+        'SELECT * FROM comments WHERE taskId = $1',
+        [task.id]
+      );
+      const categoryResult = await db.query(
+        'SELECT * FROM categories WHERE id = $1',
+        [task.categoryId]
+      );
 
-      if (category) {
-        task.categoryName = category.name;
+      if (categoryResult.rows.length > 0) {
+        task.categoryName = categoryResult.rows[0].name;
       }
-      if (comments) {
-        task.comments = comments;
+      if (commentsResult.rows.length > 0) {
+        task.comments = commentsResult.rows;
       }
     }
-
-    // await this.redis.setJSON(this.TASKS_CACHE_KEY, tasks, this.CACHE_TTL);
 
     return tasks;
   }
 
   async getUsersTasks(userId: string): Promise<Task[]> {
-    const db = this.db.getDb();
-    const tasks = await db.all<Task[]>(
-      'SELECT * FROM tasks WHERE parentId IS NULL AND userId = ?',
+    const db = this.db.getClient();
+    const tasksResult = await db.query(
+      'SELECT * FROM tasks WHERE parentId IS NULL AND userId = $1',
       [userId]
     );
+    const tasks = tasksResult.rows;
 
     for (let task of tasks) {
       task.subtasks = await this.getSubtasks(task.id);
-      const comments = await db.all('SELECT * FROM comments WHERE taskId = ?', [
-        task.id,
-      ]);
-      const category = await db.get('SELECT * FROM categories WHERE id = ?', [
-        task.categoryId,
-      ]);
+      const commentsResult = await db.query(
+        'SELECT * FROM comments WHERE taskId = $1',
+        [task.id]
+      );
+      const categoryResult = await db.query(
+        'SELECT * FROM categories WHERE id = $1',
+        [task.categoryId]
+      );
 
-      if (category) {
-        task.categoryName = category.name;
+      if (categoryResult.rows.length > 0) {
+        task.categoryName = categoryResult.rows[0].name;
       }
-      if (comments) {
-        task.comments = comments;
+      if (commentsResult.rows.length > 0) {
+        task.comments = commentsResult.rows;
       }
     }
 
@@ -143,22 +126,27 @@ class TaskRepository {
 
   async getTaskById(id: string, userId: string): Promise<Task> {
     try {
-      const db = this.db.getDb();
-      const task = await db.get<Task>('SELECT * FROM tasks WHERE id = ?', [id]);
+      const db = this.db.getClient();
+      const taskResult = await db.query('SELECT * FROM tasks WHERE id = $1', [
+        id,
+      ]);
 
-      if (!task) {
+      if (taskResult.rows.length === 0) {
         throw new Error('Task not found');
       }
+
+      const task = taskResult.rows[0];
 
       if (task.userId !== userId) {
         throw new Error('Task not related to user');
       }
 
       task.subtasks = await this.getSubtasks(id);
-      const comments = await db.all('SELECT * FROM comments WHERE taskId = ?', [
-        id,
-      ]);
-      task.comments = comments;
+      const commentsResult = await db.query(
+        'SELECT * FROM comments WHERE taskId = $1',
+        [id]
+      );
+      task.comments = commentsResult.rows;
 
       return task;
     } catch (error) {
@@ -168,12 +156,12 @@ class TaskRepository {
   }
 
   private async getSubtasks(parentId: string): Promise<Task[]> {
-    const db = this.db.getDb();
-
-    const subtasks = await db.all<Task[]>(
-      'SELECT * FROM tasks WHERE parentId = ?',
+    const db = this.db.getClient();
+    const subtasksResult = await db.query(
+      'SELECT * FROM tasks WHERE parentId = $1',
       [parentId]
     );
+    const subtasks = subtasksResult.rows;
 
     for (let subtask of subtasks) {
       subtask.subtasks = await this.getSubtasks(subtask.id);
@@ -187,21 +175,27 @@ class TaskRepository {
     updateData: UpdateTaskDto,
     userId: string
   ): Promise<Task> {
-    const db = this.db.getDb();
-    const existingTask = await db.get('SELECT * FROM tasks WHERE id = ?', [id]);
-    if (!existingTask) {
+    const db = this.db.getClient();
+    const existingTaskResult = await db.query(
+      'SELECT * FROM tasks WHERE id = $1',
+      [id]
+    );
+    if (existingTaskResult.rows.length === 0) {
       throw new Error('Task not found');
     }
+
+    const existingTask = existingTaskResult.rows[0];
 
     if (existingTask.userId !== userId) {
       throw new Error('Task not related to user');
     }
 
     if (updateData.categoryId) {
-      const category = await db.get('SELECT * FROM categories WHERE id = ?', [
-        updateData.categoryId,
-      ]);
-      if (!category) {
+      const categoryResult = await db.query(
+        'SELECT * FROM categories WHERE id = $1',
+        [updateData.categoryId]
+      );
+      if (categoryResult.rows.length === 0) {
         throw new Error('Category not found');
       }
     }
@@ -210,51 +204,49 @@ class TaskRepository {
     const updateValues: any[] = [];
 
     if (updateData.title !== undefined) {
-      updateQuery += 'title = ?, ';
+      updateQuery += 'title = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.title);
     }
 
     if (updateData.description !== undefined) {
-      updateQuery += 'description = ?, ';
+      updateQuery += 'description = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.description);
     }
 
     if (updateData.status !== undefined) {
-      updateQuery += 'status = ?, ';
+      updateQuery += 'status = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.status);
     }
 
     if (updateData.lat !== undefined) {
-      updateQuery += 'lat = ?, ';
+      updateQuery += 'lat = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.lat);
     }
 
     if (updateData.lng !== undefined) {
-      updateQuery += 'lng = ?, ';
+      updateQuery += 'lng = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.lng);
     }
 
     if (updateData.categoryId !== undefined) {
-      updateQuery += 'categoryId = ?, ';
+      updateQuery += 'categoryId = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.categoryId);
     }
 
     if (updateData.endTime !== undefined) {
-      updateQuery += 'endTime = ?, ';
+      updateQuery += 'endTime = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.endTime);
     }
 
     updateQuery = updateQuery.slice(0, -2);
 
-    updateQuery += ' WHERE id = ?';
+    updateQuery += ' WHERE id = $' + (updateValues.length + 1);
     updateValues.push(id);
 
-    if (updateValues.length > 1) {
-      await db.run(updateQuery, updateValues);
-    }
+    await db.query(updateQuery, updateValues);
 
     if (updateData.subtasks) {
-      await db.run('DELETE FROM tasks WHERE parentId = ?', [id]);
+      await db.query('DELETE FROM tasks WHERE parentId = $1', [id]);
 
       for (const subtask of updateData.subtasks) {
         await this.createTask(
@@ -267,43 +259,35 @@ class TaskRepository {
       }
     }
 
-    const updatedTask = await this.getTaskById(id, userId);
-
-    // await this.redis.del(this.TASKS_CACHE_KEY);
-    // await this.redis.del(this.TASK_CACHE_KEY(id));
-
-    // await this.redis.setJSON(
-    //   this.TASK_CACHE_KEY(id),
-    //   updatedTask,
-    //   this.CACHE_TTL
-    // );
-
-    return updatedTask;
+    return this.getTaskById(id, userId);
   }
 
   async deleteTask(id: string, userId: string): Promise<void> {
-    const db = this.db.getDb();
-    const existingTask = await db.get('SELECT * FROM tasks WHERE id = ?', [id]);
-    if (!existingTask) {
+    const db = this.db.getClient();
+    const existingTaskResult = await db.query(
+      'SELECT * FROM tasks WHERE id = $1',
+      [id]
+    );
+    if (existingTaskResult.rows.length === 0) {
       throw new Error('Task not found');
     }
+
+    const existingTask = existingTaskResult.rows[0];
 
     if (existingTask.userId !== userId) {
       throw new Error('Task not related to user');
     }
 
-    const relatedComments = await db.all(
-      'SELECT * FROM comments WHERE taskId = ?',
+    const relatedCommentsResult = await db.query(
+      'SELECT * FROM comments WHERE taskId = $1',
       [id]
     );
 
-    if (relatedComments.length > 0) {
-      await db.run('DELETE FROM comments WHERE taskId = ?', [id]);
+    if (relatedCommentsResult.rows.length > 0) {
+      await db.query('DELETE FROM comments WHERE taskId = $1', [id]);
     }
-    await db.run('DELETE FROM tasks WHERE id = ?', [id]);
 
-    // await this.redis.del(this.TASKS_CACHE_KEY);
-    // await this.redis.del(this.TASK_CACHE_KEY(id));
+    await db.query('DELETE FROM tasks WHERE id = $1', [id]);
   }
 
   async addSubtask(
@@ -311,8 +295,6 @@ class TaskRepository {
     subtask: CreateTaskDto,
     userId: string
   ): Promise<Task> {
-    const parentTask = await this.getTaskById(parentId, userId);
-
     await this.createTask(
       {
         ...subtask,

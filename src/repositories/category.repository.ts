@@ -5,29 +5,28 @@ import {
   UpdateCategoryDto,
   Category,
 } from '../models/category.model';
-import { NOTFOUND } from 'sqlite3';
 import { Task } from '../models/task.model';
 
 class CategoryRepository {
   private db = DatabaseService.getInstance();
 
   async createCategory(category: CreateCategoryDto): Promise<Category> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
     const id = uuidv4();
     const createdAt = new Date().toISOString();
 
-    const isCategory = await db.get<Category>(
-      'SELECT * FROM categories WHERE name = ?',
+    const result = await db.query<Category>(
+      'SELECT * FROM categories WHERE name = $1',
       [category.name]
     );
 
-    if (isCategory) {
-      throw new Error('Such category already exist');
+    if (result.rows.length > 0) {
+      throw new Error('Such category already exists');
     }
 
-    await db.run(
-      'INSERT INTO categories (id, name, createdAt) VALUES (?, ?, ?)',
+    await db.query(
+      'INSERT INTO categories (id, name, createdAt) VALUES ($1, $2, $3)',
       [id, category.name, createdAt]
     );
 
@@ -35,62 +34,62 @@ class CategoryRepository {
   }
 
   async getAllCategories(): Promise<Category[]> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const categories = await db.all<Category[]>('SELECT * FROM categories');
+    const result = await db.query<Category>('SELECT * FROM categories');
 
-    return categories;
+    return result.rows;
   }
 
   async getCategoryById(id: string): Promise<Category> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const category = await db.get<Category>(
-      'SELECT * FROM categories WHERE id = ?',
+    const result = await db.query<Category>(
+      'SELECT * FROM categories WHERE id = $1',
       [id]
     );
 
-    if (!category) {
+    if (result.rows.length === 0) {
       throw new Error('Category not found');
     }
 
-    return category;
+    return result.rows[0];
   }
 
   async tasksByCategory(id: string, userId: string): Promise<Task[]> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const tasks = await db.all<Task[]>(
-      'SELECT * FROM tasks WHERE categoryId = ? AND userId = ?',
+    const result = await db.query(
+      'SELECT * FROM tasks WHERE categoryId = $1 AND userId = $2',
       [id, userId]
     );
 
-    return tasks;
+    return result.rows;
   }
 
   async updateCategory(
     id: string,
     updateData: UpdateCategoryDto
   ): Promise<Category> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const category = await db.get('SELECT * FROM categories WHERE id = ?', [
+    const result = await db.query('SELECT * FROM categories WHERE id = $1', [
       id,
     ]);
-    if (!category) {
+    if (result.rows.length === 0) {
       throw new Error('Category not found');
     }
 
-    const isCategory = await db.get<Category>(
-      'SELECT * FROM categories WHERE name = ?',
+    const existingCategory = await db.query<Category>(
+      'SELECT * FROM categories WHERE name = $1',
       [updateData.name]
     );
 
-    if (isCategory) {
-      throw new Error('Such category already exist');
+    if (existingCategory.rows.length > 0) {
+      throw new Error('Such category already exists');
     }
 
-    await db.run('UPDATE categories SET name = ? WHERE id = ?', [
+    await db.query('UPDATE categories SET name = $1 WHERE id = $2', [
       updateData.name,
       id,
     ]);
@@ -99,23 +98,24 @@ class CategoryRepository {
   }
 
   async deleteCategory(id: string): Promise<void> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const category = await db.get('SELECT * FROM categories WHERE id = ?', [
+    const result = await db.query('SELECT * FROM categories WHERE id = $1', [
       id,
     ]);
-    if (!category) {
+    if (result.rows.length === 0) {
       throw new Error('Category not found');
     }
-    const tasks = await db.all<Task[]>(
-      'SELECT * FROM tasks WHERE categoryId = ?',
+
+    const tasks = await db.query<Task[]>(
+      'SELECT * FROM tasks WHERE categoryId = $1',
       [id]
     );
-    if (tasks.length > 0) {
-      throw new Error('Category cant be delete because it has related tasks');
+    if (tasks.rows.length > 0) {
+      throw new Error("Category can't be deleted because it has related tasks");
     }
 
-    await db.run('DELETE FROM categories WHERE id = ?', [id]);
+    await db.query('DELETE FROM categories WHERE id = $1', [id]);
   }
 }
 

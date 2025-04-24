@@ -31,33 +31,34 @@ class BusinessRepository {
     data: CreateBusinessDto,
     userId: string
   ): Promise<Business> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
     const id = uuidv4();
     const createdAt = new Date().toISOString();
 
-    const existingBusiness = await db.get<Business>(
-      'SELECT * FROM businesses WHERE email = ?',
+    const result = await db.query<Business>(
+      'SELECT * FROM businesses WHERE email = $1',
       [data.email]
     );
 
-    if (existingBusiness) {
+    if (result.rows.length > 0) {
       throw new Error('Business with this email already exists');
     }
 
-    const user = await db.get(
+    const userResult = await db.query(
       `SELECT u.roleId, r.name, u.name AS roleName
        FROM users u
        JOIN roles r ON u.roleId = r.id
-       WHERE u.id = ?`,
+       WHERE u.id = $1`,
       [userId]
     );
+    const user = userResult.rows[0];
 
-    await db.run(
+    await db.query(
       `INSERT INTO businesses (
         id, name, employeeCount, phoneNumber, email, 
         country, city, ownerFullName, description, image, userId, status, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         id,
         data.name,
@@ -81,58 +82,67 @@ class BusinessRepository {
   }
 
   async getAllBusinesses(): Promise<Business[]> {
-    const db = this.db.getDb();
-    return db.all<Business[]>(
-      'SELECT * FROM businesses WHERE status = ? ORDER BY createdAt DESC',
+    const db = this.db.getClient();
+    const result = await db.query(
+      'SELECT * FROM businesses WHERE status = $1 ORDER BY createdAt DESC',
       ['approved']
     );
+
+    return result.rows;
   }
 
   async getAllBusinessesByAdmin(): Promise<Business[]> {
-    const db = this.db.getDb();
-    return db.all<Business[]>(
+    const db = this.db.getClient();
+    const result = await db.query(
       'SELECT * FROM businesses ORDER BY createdAt DESC'
     );
+
+    return result.rows;
   }
 
   async changeStatus(id: string, status: BUSINESS_STATUS): Promise<Business> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const business = await db.get<Business>(
-      'SELECT * FROM businesses WHERE id = ?',
+    const result = await db.query<Business>(
+      'SELECT * FROM businesses WHERE id = $1',
       [id]
     );
 
-    if (!business) {
+    if (result.rows.length === 0) {
       throw new Error('Business not found');
     }
 
-    await db.run(`UPDATE businesses SET status = ? WHERE id = ?`, [status, id]);
+    await db.query(`UPDATE businesses SET status = $1 WHERE id = $2`, [
+      status,
+      id,
+    ]);
 
     return this.getBusinessById(id);
   }
 
   async getUserBusinesses(userId: string): Promise<Business[]> {
-    const db = this.db.getDb();
-    return db.all<Business[]>(
-      'SELECT * FROM businesses WHERE userId = ? ORDER BY createdAt DESC',
+    const db = this.db.getClient();
+    const result = await db.query(
+      'SELECT * FROM businesses WHERE userId = $1 ORDER BY createdAt DESC',
       [userId]
     );
+
+    return result.rows;
   }
 
   async getBusinessById(id: string): Promise<Business> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const business = await db.get<Business>(
-      'SELECT * FROM businesses WHERE id = ?',
+    const result = await db.query<Business>(
+      'SELECT * FROM businesses WHERE id = $1',
       [id]
     );
 
-    if (!business) {
+    if (result.rows.length === 0) {
       throw new Error('Business not found');
     }
 
-    return business;
+    return result.rows[0];
   }
 
   async updateBusiness(
@@ -140,36 +150,39 @@ class BusinessRepository {
     userId: string,
     data: UpdateBusinessDto
   ): Promise<Business> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const business = await db.get<Business>(
-      'SELECT * FROM businesses WHERE id = ?',
+    const result = await db.query<Business>(
+      'SELECT * FROM businesses WHERE id = $1',
       [id]
     );
 
-    if (!business) {
+    if (result.rows.length === 0) {
       throw new Error('Business not found');
     }
 
-    const currentUser = await db.get(
+    const business = result.rows[0];
+
+    const currentUserResult = await db.query(
       `SELECT u.roleId, r.name AS roleName
        FROM users u
        JOIN roles r ON u.roleId = r.id
-       WHERE u.id = ?`,
+       WHERE u.id = $1`,
       [userId]
     );
+    const currentUser = currentUserResult.rows[0];
 
     if (business.userId !== userId && currentUser.roleName !== 'admin') {
       throw new Error('Updating business is forbidden');
     }
 
     if (data.email && data.email !== business.email) {
-      const existingBusiness = await db.get<Business>(
-        'SELECT * FROM businesses WHERE email = ? AND id != ?',
+      const existingBusiness = await db.query<Business>(
+        'SELECT * FROM businesses WHERE email = $1 AND id != $2',
         [data.email, id]
       );
 
-      if (existingBusiness) {
+      if (existingBusiness.rows.length > 0) {
         throw new Error('Business with this email already exists');
       }
     }
@@ -179,11 +192,11 @@ class BusinessRepository {
       await this.deleteImage(oldImagePath);
     }
 
-    await db.run(
+    await db.query(
       `UPDATE businesses SET 
-        name = ?, employeeCount = ?, phoneNumber = ?, email = ?,
-        country = ?, city = ?, description = ?, image = ?
-      WHERE id = ?`,
+        name = $1, employeeCount = $2, phoneNumber = $3, email = $4,
+        country = $5, city = $6, description = $7, image = $8
+      WHERE id = $9`,
       [
         data.name || business.name,
         data.employeeCount || business.employeeCount,
@@ -201,24 +214,27 @@ class BusinessRepository {
   }
 
   async deleteBusiness(id: string, userId: string): Promise<void> {
-    const db = this.db.getDb();
+    const db = this.db.getClient();
 
-    const business = await db.get<Business>(
-      'SELECT * FROM businesses WHERE id = ?',
+    const result = await db.query<Business>(
+      'SELECT * FROM businesses WHERE id = $1',
       [id]
     );
 
-    if (!business) {
+    if (result.rows.length === 0) {
       throw new Error('Business not found');
     }
 
-    const currentUser = await db.get(
+    const business = result.rows[0];
+
+    const currentUserResult = await db.query(
       `SELECT u.roleId, r.name AS roleName
        FROM users u
        JOIN roles r ON u.roleId = r.id
-       WHERE u.id = ?`,
+       WHERE u.id = $1`,
       [userId]
     );
+    const currentUser = currentUserResult.rows[0];
 
     if (business.userId !== userId && currentUser.roleName !== 'admin') {
       throw new Error('Deleting business is forbidden');
@@ -229,7 +245,7 @@ class BusinessRepository {
       await this.deleteImage(imagePath);
     }
 
-    await db.run('DELETE FROM businesses WHERE id = ?', [id]);
+    await db.query('DELETE FROM businesses WHERE id = $1', [id]);
   }
 }
 
