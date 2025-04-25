@@ -8,14 +8,19 @@ import {
   uploadMiddleware,
   getUserBusinesses,
   changeStatus,
-  getAllBusinessesByAdmin,
+  getBusinessesByStatus,
 } from '../controllers/business.controller';
 import { checkAdminRole, verifyToken } from '../middlewares/auth.middleware';
 
 const router = express.Router();
 
 router.get('/', verifyToken, getAllBusinesses);
-router.get('/all', verifyToken, checkAdminRole, getAllBusinessesByAdmin);
+router.get(
+  '/status/:status',
+  verifyToken,
+  checkAdminRole,
+  getBusinessesByStatus
+);
 router.get('/my', verifyToken, getUserBusinesses);
 router.get('/:id', verifyToken, getBusinessById);
 router.post('/', verifyToken, uploadMiddleware, createBusiness);

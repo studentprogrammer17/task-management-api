@@ -46,7 +46,7 @@ class BusinessRepository {
     }
 
     const userResult = await db.query(
-      `SELECT u."roleId", r.name, u.name AS roleName
+      `SELECT u."roleId", r.name, u.name AS "roleName"
        FROM users u
        JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
@@ -81,20 +81,21 @@ class BusinessRepository {
     return this.getBusinessById(id);
   }
 
-  async getAllBusinesses(): Promise<Business[]> {
+  async getAllBusinesses(userId: string): Promise<Business[]> {
     const db = this.db.getClient();
     const result = await db.query(
-      'SELECT * FROM businesses WHERE status = $1 ORDER BY "createdAt" DESC',
-      ['approved']
+      'SELECT * FROM businesses WHERE "userId" = $1 ORDER BY "createdAt" DESC',
+      [userId]
     );
 
     return result.rows;
   }
 
-  async getAllBusinessesByAdmin(): Promise<Business[]> {
+  async getBusinessesByStatus(status: string): Promise<Business[]> {
     const db = this.db.getClient();
     const result = await db.query(
-      'SELECT * FROM businesses ORDER BY "createdAt" DESC'
+      'SELECT * FROM businesses WHERE status = $1 ORDER BY "createdAt" DESC',
+      [status]
     );
 
     return result.rows;
@@ -164,7 +165,7 @@ class BusinessRepository {
     const business = result.rows[0];
 
     const currentUserResult = await db.query(
-      `SELECT u."roleId", r.name AS roleName
+      `SELECT u."roleId", r.name AS "roleName"
        FROM users u
        JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
@@ -228,7 +229,7 @@ class BusinessRepository {
     const business = result.rows[0];
 
     const currentUserResult = await db.query(
-      `SELECT u."roleId", r.name AS roleName
+      `SELECT u."roleId", r.name AS "roleName"
        FROM users u
        JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,

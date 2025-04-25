@@ -134,7 +134,7 @@ class UserRepository {
     }
 
     const user = await db.query(
-      `SELECT u."roleId", r.name AS roleName
+      `SELECT u."roleId", r.name AS "roleName"
        FROM users u
        JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
@@ -191,7 +191,7 @@ class UserRepository {
     }
 
     const currentUser = await db.query(
-      `SELECT u."roleId", r.name AS roleName
+      `SELECT u."roleId", r.name AS "roleName"
        FROM users u
        JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,

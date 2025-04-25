@@ -84,23 +84,25 @@ const sendSuccessResponse = <T>(
 };
 
 export const getAllBusinesses = async (
-  req: Request,
+  req: CustomRequest,
   res: Response
 ): Promise<void> => {
   try {
-    const businesses = await businessRepository.getAllBusinesses();
+    const userId = (req.user as { id: string }).id;
+    const businesses = await businessRepository.getAllBusinesses(userId);
     sendSuccessResponse(res, businesses);
   } catch (error) {
     handleError(error, res);
   }
 };
 
-export const getAllBusinessesByAdmin = async (
+export const getBusinessesByStatus = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const businesses = await businessRepository.getAllBusinessesByAdmin();
+    const businessStatus: string = req.params.status;
+    const businesses = await businessRepository.getBusinessesByStatus(businessStatus);
     sendSuccessResponse(res, businesses);
   } catch (error) {
     handleError(error, res);
