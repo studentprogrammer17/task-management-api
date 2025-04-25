@@ -46,7 +46,7 @@ export const checkAdminRole = async (
   try {
     const userWithRole = await db.query(
       `SELECT r.name AS role FROM users u 
-       JOIN roles r ON u.roleId = r.id WHERE u.id = $1`,
+       JOIN roles r ON u."roleId" = r.id WHERE u.id = $1`,
       [userId]
     );
 
