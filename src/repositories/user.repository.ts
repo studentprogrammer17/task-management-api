@@ -35,8 +35,8 @@ class UserRepository {
       role,
     ]);
 
-    await db.query(
-      'INSERT INTO users (id, name, email, password, roleId, createdAt) VALUES ($1, $2, $3, $4, $5, $6)',
+    const res = await db.query(
+      'INSERT INTO users (id, name, email, password, "roleId", "createdAt") VALUES ($1, $2, $3, $4, $5, $6)',
       [
         id,
         user.name,
@@ -85,12 +85,12 @@ class UserRepository {
 
   async getAllUsers(): Promise<Omit<User, 'password'>[]> {
     const db = this.db.getClient();
-    
+
     try {
       const result = await db.query(
-        `SELECT u.id, u.name, u.email, u.createdAt, r.name AS role
+        `SELECT u.id, u.name, u.email, u."createdAt", r.name AS role
          FROM users u
-         JOIN roles r ON u.roleId = r.id`
+         JOIN roles r ON u."roleId" = r.id`
       );
 
       return result.rows;
@@ -103,9 +103,9 @@ class UserRepository {
     const db = this.db.getClient();
 
     const result = await db.query(
-      `SELECT u.id, u.name, u.email, u.password, u.createdAt, r.name AS role
+      `SELECT u.id, u.name, u.email, u.password, u."createdAt", r.name AS role
        FROM users u
-       JOIN roles r ON u.roleId = r.id
+       JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
       [id]
     );
@@ -134,9 +134,9 @@ class UserRepository {
     }
 
     const user = await db.query(
-      `SELECT u.roleId, r.name AS roleName
+      `SELECT u."roleId", r.name AS roleName
        FROM users u
-       JOIN roles r ON u.roleId = r.id
+       JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
       [userId]
     );
@@ -191,9 +191,9 @@ class UserRepository {
     }
 
     const currentUser = await db.query(
-      `SELECT u.roleId, r.name AS roleName
+      `SELECT u."roleId", r.name AS roleName
        FROM users u
-       JOIN roles r ON u.roleId = r.id
+       JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
       [userId]
     );
@@ -202,7 +202,7 @@ class UserRepository {
       throw new Error('Deleting user is forbidden');
     }
 
-    await db.query('DELETE FROM tasks WHERE userId = $1', [id]);
+    await db.query('DELETE FROM tasks WHERE "userId" = $1', [id]);
     await db.query('DELETE FROM users WHERE id = $1', [id]);
   }
 

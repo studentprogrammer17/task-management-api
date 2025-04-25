@@ -46,9 +46,9 @@ class BusinessRepository {
     }
 
     const userResult = await db.query(
-      `SELECT u.roleId, r.name, u.name AS roleName
+      `SELECT u."roleId", r.name, u.name AS roleName
        FROM users u
-       JOIN roles r ON u.roleId = r.id
+       JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
       [userId]
     );
@@ -56,8 +56,8 @@ class BusinessRepository {
 
     await db.query(
       `INSERT INTO businesses (
-        id, name, employeeCount, phoneNumber, email, 
-        country, city, ownerFullName, description, image, userId, status, createdAt
+        id, name, "employeeCount", "phoneNumber", email, 
+        country, city, "ownerFullName", description, image, "userId", status, "createdAt"
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         id,
@@ -84,7 +84,7 @@ class BusinessRepository {
   async getAllBusinesses(): Promise<Business[]> {
     const db = this.db.getClient();
     const result = await db.query(
-      'SELECT * FROM businesses WHERE status = $1 ORDER BY createdAt DESC',
+      'SELECT * FROM businesses WHERE status = $1 ORDER BY "createdAt" DESC',
       ['approved']
     );
 
@@ -94,7 +94,7 @@ class BusinessRepository {
   async getAllBusinessesByAdmin(): Promise<Business[]> {
     const db = this.db.getClient();
     const result = await db.query(
-      'SELECT * FROM businesses ORDER BY createdAt DESC'
+      'SELECT * FROM businesses ORDER BY "createdAt" DESC'
     );
 
     return result.rows;
@@ -123,7 +123,7 @@ class BusinessRepository {
   async getUserBusinesses(userId: string): Promise<Business[]> {
     const db = this.db.getClient();
     const result = await db.query(
-      'SELECT * FROM businesses WHERE userId = $1 ORDER BY createdAt DESC',
+      'SELECT * FROM businesses WHERE userId = $1 ORDER BY "createdAt" DESC',
       [userId]
     );
 
@@ -164,9 +164,9 @@ class BusinessRepository {
     const business = result.rows[0];
 
     const currentUserResult = await db.query(
-      `SELECT u.roleId, r.name AS roleName
+      `SELECT u."roleId", r.name AS roleName
        FROM users u
-       JOIN roles r ON u.roleId = r.id
+       JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
       [userId]
     );
@@ -194,7 +194,7 @@ class BusinessRepository {
 
     await db.query(
       `UPDATE businesses SET 
-        name = $1, employeeCount = $2, phoneNumber = $3, email = $4,
+        name = $1, "employeeCount" = $2, "phoneNumber" = $3, email = $4,
         country = $5, city = $6, description = $7, image = $8
       WHERE id = $9`,
       [
@@ -228,9 +228,9 @@ class BusinessRepository {
     const business = result.rows[0];
 
     const currentUserResult = await db.query(
-      `SELECT u.roleId, r.name AS roleName
+      `SELECT u."roleId", r.name AS roleName
        FROM users u
-       JOIN roles r ON u.roleId = r.id
+       JOIN roles r ON u."roleId" = r.id
        WHERE u.id = $1`,
       [userId]
     );

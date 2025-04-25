@@ -35,15 +35,15 @@ class DatabaseService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-  
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS roles (
           id UUID PRIMARY KEY,
           name TEXT NOT NULL,
-          createdAt TIMESTAMPTZ NOT NULL
+          "createdAt" TIMESTAMPTZ NOT NULL
         );
       `);
-  
+
       await client.query(`
         DO $$
         BEGIN
@@ -54,89 +54,89 @@ class DatabaseService {
           END IF;
         END $$;
       `);
-  
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS users (
           id UUID PRIMARY KEY,
           name TEXT NOT NULL,
           email TEXT NOT NULL UNIQUE,
           password TEXT NOT NULL,
-          roleId UUID REFERENCES roles(id) ON DELETE CASCADE,
-          createdAt TIMESTAMPTZ NOT NULL
+          "roleId" UUID REFERENCES roles(id) ON DELETE CASCADE,
+          "createdAt" TIMESTAMPTZ NOT NULL
         );
       `);
-  
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS categories (
           id UUID PRIMARY KEY,
           name TEXT NOT NULL,
-          createdAt TIMESTAMPTZ NOT NULL
+          "createdAt" TIMESTAMPTZ NOT NULL
         );
       `);
-  
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS tasks (
           id UUID PRIMARY KEY,
           title TEXT NOT NULL,
           description TEXT,
           status TEXT NOT NULL CHECK (status IN ('todo', 'in-progress', 'done')),
-          categoryId UUID REFERENCES categories(id) ON DELETE CASCADE,
-          userId UUID REFERENCES users(id) ON DELETE CASCADE,
-          parentId UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          "categoryId" UUID REFERENCES categories(id) ON DELETE CASCADE,
+          "userId" UUID REFERENCES users(id) ON DELETE CASCADE,
+          "parentId" UUID REFERENCES tasks(id) ON DELETE CASCADE,
           lat DOUBLE PRECISION,
           lng DOUBLE PRECISION,
-          endTime TIMESTAMPTZ,
-          createdAt TIMESTAMPTZ NOT NULL
+          "endTime" TIMESTAMPTZ,
+          "createdAt" TIMESTAMPTZ NOT NULL
         );
       `);
-  
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS comments (
           id UUID PRIMARY KEY,
-          taskId UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          "taskId" UUID REFERENCES tasks(id) ON DELETE CASCADE,
           text TEXT NOT NULL,
-          createdAt TIMESTAMPTZ NOT NULL
+          "createdAt" TIMESTAMPTZ NOT NULL
         );
       `);
-  
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS businesses (
           id UUID PRIMARY KEY,
           name TEXT NOT NULL,
-          employeeCount INTEGER NOT NULL,
-          phoneNumber TEXT NOT NULL,
+          "employeeCount" INTEGER NOT NULL,
+          "phoneNumber" TEXT NOT NULL,
           email TEXT NOT NULL UNIQUE,
           country TEXT NOT NULL,
           city TEXT NOT NULL,
-          ownerFullName TEXT NOT NULL,
+          "ownerFullName" TEXT NOT NULL,
           description TEXT,
           image TEXT,
-          userId UUID REFERENCES users(id) ON DELETE CASCADE,
+          "userId" UUID REFERENCES users(id) ON DELETE CASCADE,
           status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected')),
-          createdAt TIMESTAMPTZ NOT NULL
+          "createdAt" TIMESTAMPTZ NOT NULL
         );
       `);
-  
+
       const now = new Date().toISOString();
 
       await client.query(
         `
-        INSERT INTO roles (id, name, createdAt)
+        INSERT INTO roles (id, name, "createdAt")
         VALUES ($1, $2, $3)
         ON CONFLICT (name) DO NOTHING
         `,
         [randomUUID(), 'admin', now]
       );
-  
+
       await client.query(
         `
-        INSERT INTO roles (id, name, createdAt)
+        INSERT INTO roles (id, name, "createdAt")
         VALUES ($1, $2, $3)
         ON CONFLICT (name) DO NOTHING
         `,
         [randomUUID(), 'user', now]
       );
-  
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -145,7 +145,6 @@ class DatabaseService {
       client.release();
     }
   }
-  
 
   public getClient() {
     return this.pool;

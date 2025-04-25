@@ -26,7 +26,7 @@ class CategoryRepository {
     }
 
     await db.query(
-      'INSERT INTO categories (id, name, createdAt) VALUES ($1, $2, $3)',
+      'INSERT INTO categories (id, name, "createdAt") VALUES ($1, $2, $3)',
       [id, category.name, createdAt]
     );
 
@@ -60,7 +60,7 @@ class CategoryRepository {
     const db = this.db.getClient();
 
     const result = await db.query(
-      'SELECT * FROM tasks WHERE categoryId = $1 AND userId = $2',
+      'SELECT * FROM tasks WHERE "categoryId" = $1 AND "userId" = $2',
       [id, userId]
     );
 
@@ -108,7 +108,7 @@ class CategoryRepository {
     }
 
     const tasks = await db.query<Task[]>(
-      'SELECT * FROM tasks WHERE categoryId = $1',
+      'SELECT * FROM tasks WHERE "categoryId" = $1',
       [id]
     );
     if (tasks.rows.length > 0) {

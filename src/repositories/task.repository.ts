@@ -30,7 +30,7 @@ class TaskRepository {
       }
 
       await db.query(
-        'INSERT INTO tasks (id, title, description, status, categoryId, parentId, lat, lng, endTime, userId, createdAt) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+        'INSERT INTO tasks (id, title, description, status, "categoryId", "parentId", lat, lng, "endTime", "userId", "createdAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
         [
           id,
           task.title,
@@ -68,14 +68,14 @@ class TaskRepository {
   async getAllTasks(): Promise<Task[]> {
     const db = this.db.getClient();
     const tasksResult = await db.query(
-      'SELECT * FROM tasks WHERE parentId IS NULL'
+      'SELECT * FROM tasks WHERE "parentId" IS NULL'
     );
     const tasks = tasksResult.rows;
 
     for (let task of tasks) {
       task.subtasks = await this.getSubtasks(task.id);
       const commentsResult = await db.query(
-        'SELECT * FROM comments WHERE taskId = $1',
+        'SELECT * FROM comments WHERE "taskId" = $1',
         [task.id]
       );
       const categoryResult = await db.query(
@@ -97,7 +97,7 @@ class TaskRepository {
   async getUsersTasks(userId: string): Promise<Task[]> {
     const db = this.db.getClient();
     const tasksResult = await db.query(
-      'SELECT * FROM tasks WHERE parentId IS NULL AND userId = $1',
+      'SELECT * FROM tasks WHERE "parentId" IS NULL AND "userId" = $1',
       [userId]
     );
     const tasks = tasksResult.rows;
@@ -105,7 +105,7 @@ class TaskRepository {
     for (let task of tasks) {
       task.subtasks = await this.getSubtasks(task.id);
       const commentsResult = await db.query(
-        'SELECT * FROM comments WHERE taskId = $1',
+        'SELECT * FROM comments WHERE "taskId" = $1',
         [task.id]
       );
       const categoryResult = await db.query(
@@ -143,7 +143,7 @@ class TaskRepository {
 
       task.subtasks = await this.getSubtasks(id);
       const commentsResult = await db.query(
-        'SELECT * FROM comments WHERE taskId = $1',
+        'SELECT * FROM comments WHERE "taskId" = $1',
         [id]
       );
       task.comments = commentsResult.rows;
@@ -158,7 +158,7 @@ class TaskRepository {
   private async getSubtasks(parentId: string): Promise<Task[]> {
     const db = this.db.getClient();
     const subtasksResult = await db.query(
-      'SELECT * FROM tasks WHERE parentId = $1',
+      'SELECT * FROM tasks WHERE "parentId" = $1',
       [parentId]
     );
     const subtasks = subtasksResult.rows;
@@ -229,12 +229,12 @@ class TaskRepository {
     }
 
     if (updateData.categoryId !== undefined) {
-      updateQuery += 'categoryId = $' + (updateValues.length + 1) + ', ';
+      updateQuery += '"categoryId" = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.categoryId);
     }
 
     if (updateData.endTime !== undefined) {
-      updateQuery += 'endTime = $' + (updateValues.length + 1) + ', ';
+      updateQuery += '"endTime" = $' + (updateValues.length + 1) + ', ';
       updateValues.push(updateData.endTime);
     }
 
@@ -246,7 +246,7 @@ class TaskRepository {
     await db.query(updateQuery, updateValues);
 
     if (updateData.subtasks) {
-      await db.query('DELETE FROM tasks WHERE parentId = $1', [id]);
+      await db.query('DELETE FROM tasks WHERE "parentId" = $1', [id]);
 
       for (const subtask of updateData.subtasks) {
         await this.createTask(
@@ -279,12 +279,12 @@ class TaskRepository {
     }
 
     const relatedCommentsResult = await db.query(
-      'SELECT * FROM comments WHERE taskId = $1',
+      'SELECT * FROM comments WHERE "taskId" = $1',
       [id]
     );
 
     if (relatedCommentsResult.rows.length > 0) {
-      await db.query('DELETE FROM comments WHERE taskId = $1', [id]);
+      await db.query('DELETE FROM comments WHERE "taskId" = $1', [id]);
     }
 
     await db.query('DELETE FROM tasks WHERE id = $1', [id]);

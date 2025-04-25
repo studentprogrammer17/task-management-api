@@ -25,7 +25,7 @@ class CommentRepository {
     }
 
     await db.query(
-      'INSERT INTO comments (id, text, taskId, createdAt) VALUES ($1, $2, $3, $4)',
+      'INSERT INTO comments (id, text, "taskId", "createdAt") VALUES ($1, $2, $3, $4)',
       [id, comment.text, comment.taskId, createdAt]
     );
 
@@ -58,9 +58,10 @@ class CommentRepository {
   async getCommentsByTaskId(id: string): Promise<Comment[]> {
     const db = this.db.getClient();
 
-    const result = await db.query('SELECT * FROM comments WHERE taskId = $1', [
-      id,
-    ]);
+    const result = await db.query(
+      'SELECT * FROM comments WHERE "taskId" = $1',
+      [id]
+    );
 
     return result.rows;
   }
