@@ -83,19 +83,51 @@ class UserRepository {
     return token;
   }
 
-  async getAllUsers(): Promise<Omit<User, 'password'>[]> {
+  async getAllUsers(
+    search = '',
+    page = 1,
+    limit = 10
+  ): Promise<{
+    users: Omit<User, 'password'>[];
+    total: number;
+  }> {
     const db = this.db.getClient();
+    const offset = (page - 1) * limit;
 
     try {
-      const result = await db.query(
-        `SELECT u.id, u.name, u.email, u."createdAt", r.name AS role
-         FROM users u
-         JOIN roles r ON u."roleId" = r.id`
-      );
+      const usersQuery = `
+        SELECT u.id, u.name, u.email, u."createdAt", r.name AS role
+        FROM users u
+        JOIN roles r ON u."roleId" = r.id
+        WHERE 
+          u.name ILIKE $1 OR
+          u.email ILIKE $1 OR
+          r.name ILIKE $1
+        ORDER BY u."createdAt" DESC
+        LIMIT $2 OFFSET $3
+      `;
 
-      return result.rows;
+      const countQuery = `
+        SELECT COUNT(*) AS total
+        FROM users u
+        JOIN roles r ON u."roleId" = r.id
+        WHERE 
+          u.name ILIKE $1 OR
+          u.email ILIKE $1 OR
+          r.name ILIKE $1
+      `;
+
+      const [usersResult, countResult] = await Promise.all([
+        db.query(usersQuery, [`%${search}%`, limit, offset]),
+        db.query(countQuery, [`%${search}%`]),
+      ]);
+
+      const users = usersResult.rows;
+      const total = parseInt(countResult.rows[0].total, 10);
+
+      return { users, total };
     } catch (error) {
-      throw new Error(`Error fetching users`);
+      throw new Error('Error fetching users');
     }
   }
 

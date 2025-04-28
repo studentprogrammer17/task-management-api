@@ -13,8 +13,26 @@ export const getAllUsers = async (
   res: Response
 ): Promise<void> => {
   try {
-    const users = await userRepository.getAllUsers();
-    res.status(200).json(users);
+    const { search = '', page = '1', limit = '10' } = req.query;
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+
+    const { users, total } = await userRepository.getAllUsers(
+      search as string,
+      pageNum,
+      limitNum
+    );
+
+    res.status(200).json({
+      edges: users,
+      pageInfo: {
+        hasNextPage: total > pageNum * limitNum,
+        hasPreviousPage: pageNum > 1,
+        total,
+        current: users.length + (pageNum - 1) * limitNum,
+        limit: limitNum,
+      },
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve users' });
   }

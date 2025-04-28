@@ -81,7 +81,17 @@ class BusinessRepository {
     return this.getBusinessById(id);
   }
 
-  async getAllBusinesses(userId: string): Promise<Business[]> {
+  async getAllBusinesses(): Promise<Business[]> {
+    const db = this.db.getClient();
+    const result = await db.query(
+      'SELECT * FROM businesses WHERE status = $1 ORDER BY "createdAt" DESC',
+      [BUSINESS_STATUS.APPROVED]
+    );
+
+    return result.rows;
+  }
+
+  async getAllUserBusinesses(userId: string): Promise<Business[]> {
     const db = this.db.getClient();
     const result = await db.query(
       'SELECT * FROM businesses WHERE "userId" = $1 ORDER BY "createdAt" DESC',

@@ -88,8 +88,20 @@ export const getAllBusinesses = async (
   res: Response
 ): Promise<void> => {
   try {
+    const businesses = await businessRepository.getAllBusinesses();
+    sendSuccessResponse(res, businesses);
+  } catch (error) {
+    handleError(error, res);
+  }
+};
+
+export const getAllUserBusinesses = async (
+  req: CustomRequest,
+  res: Response
+): Promise<void> => {
+  try {
     const userId = (req.user as { id: string }).id;
-    const businesses = await businessRepository.getAllBusinesses(userId);
+    const businesses = await businessRepository.getAllUserBusinesses(userId);
     sendSuccessResponse(res, businesses);
   } catch (error) {
     handleError(error, res);
@@ -102,7 +114,9 @@ export const getBusinessesByStatus = async (
 ): Promise<void> => {
   try {
     const businessStatus: string = req.params.status;
-    const businesses = await businessRepository.getBusinessesByStatus(businessStatus);
+    const businesses = await businessRepository.getBusinessesByStatus(
+      businessStatus
+    );
     sendSuccessResponse(res, businesses);
   } catch (error) {
     handleError(error, res);
@@ -228,12 +242,10 @@ export const changeStatus = async (
     const status: BUSINESS_STATUS = req.params.status as BUSINESS_STATUS;
 
     if (!Object.values(BUSINESS_STATUS).includes(status)) {
-      res
-        .status(400)
-        .json({
-          error:
-            'Invalid status. Valid statuses are: pending, approved, rejected.',
-        });
+      res.status(400).json({
+        error:
+          'Invalid status. Valid statuses are: pending, approved, rejected.',
+      });
       return;
     }
 

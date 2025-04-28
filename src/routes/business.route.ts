@@ -1,6 +1,6 @@
 import express from 'express';
 import {
-  getAllBusinesses,
+  getAllUserBusinesses,
   getBusinessById,
   createBusiness,
   updateBusiness,
@@ -9,12 +9,14 @@ import {
   getUserBusinesses,
   changeStatus,
   getBusinessesByStatus,
+  getAllBusinesses,
 } from '../controllers/business.controller';
 import { checkAdminRole, verifyToken } from '../middlewares/auth.middleware';
 
 const router = express.Router();
 
-router.get('/', verifyToken, getAllBusinesses);
+router.get('/all', verifyToken, getAllBusinesses);
+router.get('/', verifyToken, getAllUserBusinesses);
 router.get(
   '/status/:status',
   verifyToken,
